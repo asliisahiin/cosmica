@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "107315584926",
+    "project_id": "cosmica-asli",
+    "storage_bucket": "cosmica-asli.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:107315584926:android:b0ff5f440df94ab87e008f",
+        "android_client_info": {
+          "package_name": "com.example.watchlist"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBkk2OYJz-hnZ6gBP5giT1BH2datfO6mOE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
