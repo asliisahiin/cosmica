@@ -1,3 +1,4 @@
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
+import 'services/notification_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 
@@ -15,7 +17,15 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Firebase'in kullanıcı oturumunu hazırlamasını bekliyoruz.
+  // Bildirim izinlerini iste ve kullanıcının FCM token'ını kaydet.
+  // Kullanıcı giriş yapmamışsa token, giriş sonrasında da kaydedilir.
+  try {
+    await NotificationService.initialize();
+  } catch (error) {
+    debugPrint('Bildirim servisi başlatılamadı: $error');
+  }
+
+  // Firebase'in kullanıcı oturumunu hazırlamasını bekle.
   final user = await FirebaseAuth.instance.authStateChanges().first;
 
   // Önce cihazdaki kayıtlı temayı al.
@@ -24,16 +34,13 @@ Future<void> main() async {
 
   ThemeMode initialTheme = ThemeMode.dark;
 
-  // Öncelikle SharedPreferences kaydını kullan.
   switch (savedLocalTheme) {
     case 'light':
       initialTheme = ThemeMode.light;
       break;
-
     case 'system':
       initialTheme = ThemeMode.system;
       break;
-
     case 'dark':
       initialTheme = ThemeMode.dark;
       break;
@@ -47,26 +54,22 @@ Future<void> main() async {
           .doc(user.uid)
           .get();
 
-      final data = doc.data();
-
       final savedFirestoreTheme =
-          data?['themeMode']?.toString();
+          doc.data()?['themeMode']?.toString();
 
       switch (savedFirestoreTheme) {
         case 'light':
           initialTheme = ThemeMode.light;
           break;
-
         case 'system':
           initialTheme = ThemeMode.system;
           break;
-
         case 'dark':
           initialTheme = ThemeMode.dark;
           break;
       }
-    } catch (_) {
-      // Firestore okunamazsa yerel kayıt kullanılmaya devam eder.
+    } catch (error) {
+      debugPrint('Tema tercihi okunamadı: $error');
     }
   }
 
@@ -95,49 +98,37 @@ class _CosmicAppState extends State<CosmicApp> {
   @override
   void initState() {
     super.initState();
-
     _themeMode = widget.initialThemeMode;
   }
 
   Future<void> _changeTheme(ThemeMode mode) async {
-    // Önce uygulamada anında temayı değiştir.
     setState(() {
       _themeMode = mode;
     });
 
-    String themeValue;
+    final String themeValue;
 
     switch (mode) {
       case ThemeMode.light:
         themeValue = 'light';
         break;
-
       case ThemeMode.dark:
         themeValue = 'dark';
         break;
-
       case ThemeMode.system:
         themeValue = 'system';
         break;
     }
 
-    // ==========================================
-    // 1. CİHAZA KAYDET
-    // ==========================================
-
+    // Cihazda sakla.
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('themeMode', themeValue);
+    } catch (error) {
+      debugPrint('Tema cihazda kaydedilemedi: $error');
+    }
 
-      await prefs.setString(
-        'themeMode',
-        themeValue,
-      );
-    } catch (_) {}
-
-    // ==========================================
-    // 2. FIRESTORE'A KAYDET
-    // ==========================================
-
+    // Giriş yapılmışsa Firestore'a da kaydet.
     try {
       final user = FirebaseAuth.instance.currentUser;
 
@@ -146,18 +137,14 @@ class _CosmicAppState extends State<CosmicApp> {
             .collection('users')
             .doc(user.uid)
             .set(
-          {
-            'themeMode': themeValue,
-          },
+          {'themeMode': themeValue},
           SetOptions(merge: true),
         );
       }
-    } catch (_) {}
+    } catch (error) {
+      debugPrint('Tema Firestore kaydı başarısız: $error');
+    }
   }
-
-  // ======================================================
-  // AÇIK TEMA
-  // ======================================================
 
   ThemeData _lightTheme() {
     const primaryPurple = Color(0xFF7C3AED);
@@ -166,43 +153,34 @@ class _CosmicAppState extends State<CosmicApp> {
       useMaterial3: true,
       brightness: Brightness.light,
       scaffoldBackgroundColor: const Color(0xFFF8F7FC),
-
       colorScheme: ColorScheme.fromSeed(
         seedColor: primaryPurple,
         brightness: Brightness.light,
       ),
-
       appBarTheme: const AppBarTheme(
         backgroundColor: Color(0xFFF8F7FC),
         foregroundColor: Color(0xFF211A2E),
         elevation: 0,
       ),
-
       cardTheme: CardThemeData(
         color: Colors.white,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(
-            Radius.circular(20),
-          ),
+          borderRadius: BorderRadius.all(Radius.circular(20)),
         ),
       ),
-
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: Colors.white,
         elevation: 0,
-        indicatorColor:
-            primaryPurple.withValues(alpha: 0.14),
-        labelTextStyle:
-            const WidgetStatePropertyAll(
+        indicatorColor: primaryPurple.withValues(alpha: 0.14),
+        labelTextStyle: const WidgetStatePropertyAll(
           TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
         ),
       ),
-
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
@@ -222,23 +200,17 @@ class _CosmicAppState extends State<CosmicApp> {
           ),
         ),
       ),
-
       dialogTheme: DialogThemeData(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
         ),
       ),
-
       dividerTheme: DividerThemeData(
         color: Colors.black.withValues(alpha: 0.07),
       ),
     );
   }
-
-  // ======================================================
-  // KOYU TEMA
-  // ======================================================
 
   ThemeData _darkTheme() {
     const primaryPurple = Color(0xFF8B5CF6);
@@ -247,43 +219,34 @@ class _CosmicAppState extends State<CosmicApp> {
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: const Color(0xFF0D0820),
-
       colorScheme: ColorScheme.fromSeed(
         seedColor: primaryPurple,
         brightness: Brightness.dark,
       ),
-
       appBarTheme: const AppBarTheme(
         backgroundColor: Color(0xFF0D0820),
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-
       cardTheme: CardThemeData(
         color: const Color(0xFF17102D),
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(
-            Radius.circular(20),
-          ),
+          borderRadius: BorderRadius.all(Radius.circular(20)),
         ),
       ),
-
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: const Color(0xFF130D27),
         elevation: 0,
-        indicatorColor:
-            primaryPurple.withValues(alpha: 0.25),
-        labelTextStyle:
-            const WidgetStatePropertyAll(
+        indicatorColor: primaryPurple.withValues(alpha: 0.25),
+        labelTextStyle: const WidgetStatePropertyAll(
           TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
         ),
       ),
-
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: const Color(0xFF17102D),
@@ -303,14 +266,12 @@ class _CosmicAppState extends State<CosmicApp> {
           ),
         ),
       ),
-
       dialogTheme: DialogThemeData(
         backgroundColor: const Color(0xFF17102D),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
         ),
       ),
-
       dividerTheme: DividerThemeData(
         color: Colors.white.withValues(alpha: 0.08),
       ),
@@ -322,12 +283,9 @@ class _CosmicAppState extends State<CosmicApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Cosmica',
-
       themeMode: _themeMode,
-
       theme: _lightTheme(),
       darkTheme: _darkTheme(),
-
       home: AuthGate(
         onThemeChanged: _changeTheme,
         currentThemeMode: _themeMode,
@@ -354,10 +312,8 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
-
       builder: (context, snapshot) {
-        if (snapshot.connectionState ==
-            ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(
               child: CircularProgressIndicator(),
@@ -400,27 +356,18 @@ class WelcomePage extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor:
-          theme.scaffoldBackgroundColor,
-
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
-
           child: Column(
-            mainAxisAlignment:
-                MainAxisAlignment.center,
-
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Text(
                 '✨',
-                style: TextStyle(
-                  fontSize: 70,
-                ),
+                style: TextStyle(fontSize: 70),
               ),
-
               const SizedBox(height: 24),
-
               Text(
                 'COSMICA',
                 style: TextStyle(
@@ -430,9 +377,7 @@ class WelcomePage extends StatelessWidget {
                   color: theme.colorScheme.onSurface,
                 ),
               ),
-
               const SizedBox(height: 16),
-
               Text(
                 'Gökyüzünde sana ait\nbir hikâye var.',
                 textAlign: TextAlign.center,
@@ -442,30 +387,22 @@ class WelcomePage extends StatelessWidget {
                   color: theme.colorScheme.onSurface,
                 ),
               ),
-
               const SizedBox(height: 50),
-
               SizedBox(
                 width: double.infinity,
                 height: 56,
-
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.push(
                       context,
-
                       MaterialPageRoute(
-                        builder: (context) =>
-                            LoginScreen(
-                          onThemeChanged:
-                              onThemeChanged,
-                          currentThemeMode:
-                              currentThemeMode,
+                        builder: (context) => LoginScreen(
+                          onThemeChanged: onThemeChanged,
+                          currentThemeMode: currentThemeMode,
                         ),
                       ),
                     );
                   },
-
                   child: const Text(
                     'Başla',
                     style: TextStyle(

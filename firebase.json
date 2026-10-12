@@ -1,1 +1,42 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"cosmica-asli","appId":"1:107315584926:android:b0ff5f440df94ab87e008f","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"cosmica-asli","configurations":{"android":"1:107315584926:android:b0ff5f440df94ab87e008f","ios":"1:107315584926:ios:251b94de4a66fec67e008f","macos":"1:107315584926:ios:251b94de4a66fec67e008f","web":"1:107315584926:web:d060fae24c74b50c7e008f","windows":"1:107315584926:web:62b591c1060e5f717e008f"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "cosmica-asli",
+          "appId": "1:107315584926:android:b0ff5f440df94ab87e008f",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "cosmica-asli",
+          "configurations": {
+            "android": "1:107315584926:android:b0ff5f440df94ab87e008f",
+            "ios": "1:107315584926:ios:251b94de4a66fec67e008f",
+            "macos": "1:107315584926:ios:251b94de4a66fec67e008f",
+            "web": "1:107315584926:web:d060fae24c74b50c7e008f",
+            "windows": "1:107315584926:web:62b591c1060e5f717e008f"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ]
+}

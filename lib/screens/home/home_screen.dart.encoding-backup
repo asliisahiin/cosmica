@@ -1,0 +1,1316 @@
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cosmica/services/birth_chart_service.dart';
+import 'package:cosmica/services/horoscope_service.dart';
+import 'notifications_screen.dart';
+
+import 'biorhythm_card.dart';
+import 'numerology_card.dart';
+
+import '../tarot/tarot_screen.dart';
+import '../profile/profile_screen.dart';
+import '../chart/chart_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  final Function(ThemeMode) onThemeChanged;
+  final ThemeMode currentThemeMode;
+
+  const HomeScreen({
+    super.key,
+    required this.onThemeChanged,
+    required this.currentThemeMode,
+  });
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int selectedIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final List<Widget> pages = [
+      const _HomeContent(),
+      const ChartScreen(),
+      const _TarotContent(),
+      _ProfileContent(
+        onThemeChanged: widget.onThemeChanged,
+        currentThemeMode: widget.currentThemeMode,
+      ),
+    ];
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: pages[selectedIndex],
+      bottomNavigationBar: NavigationBar(
+        backgroundColor: theme.colorScheme.surface,
+        indicatorColor:
+            theme.colorScheme.primary.withValues(alpha: 0.25),
+        selectedIndex: selectedIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            selectedIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Ana Sayfa',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.auto_awesome_outlined),
+            selectedIcon: Icon(Icons.auto_awesome),
+            label: 'Haritam',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.style_outlined),
+            selectedIcon: Icon(Icons.style),
+            label: 'Tarot',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profil',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =====================================================
+// HOME
+// =====================================================
+
+class _HomeContent extends StatefulWidget {
+  const _HomeContent();
+
+  @override
+  State<_HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<_HomeContent> {
+  Map<String, dynamic>? _birthChart;
+
+  bool _loading = true;
+  bool _dailyHoroscopeLoading = false;
+
+  // =====================================================
+  // BUGÃœNÃœN MESAJLARI
+  // KISA - BÄ°LDÄ°RÄ°MLÄ°K - GENEL
+  // =====================================================
+
+  final List<String> _dailyMessages = const [
+    'BugÃ¼n kendine biraz daha gÃ¼ven.',
+    'Her ÅŸeyi bugÃ¼n Ã§Ã¶zmek zorunda deÄŸilsin.',
+    'BugÃ¼n sana iyi gelen ÅŸeylere biraz daha fazla alan aÃ§.',
+    'BazÄ± cevaplar acele etmediÄŸinde daha netleÅŸir.',
+    'BugÃ¼n kendi ritminde ilerlemek sana iyi gelebilir.',
+    'KÃ¼Ã§Ã¼k bir adÄ±m bile gÃ¼zel bir baÅŸlangÄ±Ã§ olabilir.',
+    'BugÃ¼n kendine karÅŸÄ± biraz daha nazik ol.',
+    'Ä°Ã§inden gelen sese biraz daha kulak ver.',
+    'BugÃ¼n gÃ¼zel bir tesadÃ¼fe aÃ§Ä±k ol.',
+    'Bazen biraz durmak da ilerlemektir.',
+    'BugÃ¼n geÃ§miÅŸten Ã§ok Ã¶nÃ¼ndeki ihtimallere bak.',
+    'Kendini baÅŸkalarÄ±yla deÄŸil, dÃ¼nkÃ¼ halinle kÄ±yasla.',
+    'BugÃ¼n seni heyecanlandÄ±ran kÃ¼Ã§Ã¼k bir ÅŸeye yer aÃ§.',
+    'Her ÅŸeyin hemen netleÅŸmesi gerekmiyor.',
+    'BugÃ¼n kontrol edebildiklerine odaklan.',
+    'Kendine inanmak iÃ§in her ÅŸeyin yolunda gitmesini bekleme.',
+    'BugÃ¼n biraz nefes almaya izin ver.',
+    'KÃ¼Ã§Ã¼k ÅŸeyler de gÃ¼zel bir gÃ¼n yaratabilir.',
+    'Bir ÅŸeyin hemen olmamasÄ±, olmayacaÄŸÄ± anlamÄ±na gelmez.',
+    'BugÃ¼n kendine ait bir alan bÄ±rak.',
+    'Bazen ihtiyacÄ±n olan ÅŸey cevap deÄŸil, biraz zaman.',
+    'BugÃ¼n seni yoran ÅŸeylerden biraz uzaklaÅŸ.',
+    'Yeni bir gÃ¼n, yeni bir ihtimal demek.',
+    'BugÃ¼n kendini olduÄŸun halinle kabul et.',
+    'Her ÅŸeyi kontrol etmek zorunda deÄŸilsin.',
+    'BugÃ¼n iÃ§indeki merakÄ± takip et.',
+    'Kendine verdiÄŸin deÄŸeri unutma.',
+    'BugÃ¼n kÃ¼Ã§Ã¼k bir deÄŸiÅŸikliÄŸe izin ver.',
+    'Bir adÄ±m atmak iÃ§in bÃ¼tÃ¼n yolu gÃ¶rmek zorunda deÄŸilsin.',
+    'BugÃ¼n gÃ¼zel olanÄ± fark etmeyi unutma.',
+  ];
+
+  String _getTodayMessage() {
+    final now = DateTime.now();
+    final startOfYear = DateTime(now.year, 1, 1);
+    final dayOfYear = now.difference(startOfYear).inDays;
+    final index = dayOfYear % _dailyMessages.length;
+
+    return _dailyMessages[index];
+  }
+
+  // =====================================================
+  // BIRTH CHART
+  // =====================================================
+
+  Future<void> _loadBirthChart() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+          });
+        }
+        return;
+      }
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final data = userDoc.data();
+
+      if (data == null) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+          });
+        }
+        return;
+      }
+
+      final birthDate = data['birthDate'] as Timestamp;
+      final birthTimeHour = data['birthTimeHour'] as int;
+      final birthTimeMinute = data['birthTimeMinute'] as int;
+      final birthPlace = data['birthPlace'] as String;
+
+      final date = birthDate.toDate();
+
+      final formattedDate =
+          '${date.day.toString().padLeft(2, '0')}.'
+          '${date.month.toString().padLeft(2, '0')}.'
+          '${date.year}';
+
+      final formattedTime =
+          '${birthTimeHour.toString().padLeft(2, '0')}:'
+          '${birthTimeMinute.toString().padLeft(2, '0')}';
+
+      debugPrint('ðŸ“¤ API YE GÄ°DEN VERÄ°:');
+      debugPrint('birth_date: $formattedDate');
+      debugPrint('birth_time: $formattedTime');
+      debugPrint('city: $birthPlace');
+
+      final result = await BirthChartService.getBirthChart(
+        birthDate: formattedDate,
+        birthTime: formattedTime,
+        city: birthPlace,
+      );
+
+      debugPrint('ðŸ”¥ DOÄžUM HARÄ°TASI API SONUCU:');
+      debugPrint(result.toString());
+
+      if (mounted) {
+        setState(() {
+          _birthChart = result;
+          _loading = false;
+        });
+      }
+
+      final sunSign = _getSunSign();
+
+      if (sunSign != 'â€”') {
+        await _loadDailyHoroscope(sunSign);
+      }
+    } catch (e) {
+      debugPrint('âŒ DOÄžUM HARÄ°TASI API HATASI: $e');
+
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  // =====================================================
+  // DAILY HOROSCOPE API
+  // =====================================================
+
+  Future<void> _loadDailyHoroscope(String sign) async {
+    if (sign == 'â€”' || sign.trim().isEmpty) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _dailyHoroscopeLoading = true;
+      });
+    }
+
+    try {
+      debugPrint('ðŸ”® GÃœNLÃœK BURÃ‡ API Ã‡AÄžRISI: $sign');
+
+      await HoroscopeService.getDailyData(sign);
+
+      debugPrint('ðŸ”® GÃœNLÃœK BURÃ‡ API Ã‡AÄžRISI TAMAMLANDI');
+
+      if (!mounted) return;
+
+      setState(() {
+        _dailyHoroscopeLoading = false;
+      });
+    } catch (e) {
+      debugPrint('âŒ GÃœNLÃœK BURÃ‡ API HATASI: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _dailyHoroscopeLoading = false;
+      });
+    }
+  }
+
+  // =====================================================
+  // SUN / MOON / RISING
+  // =====================================================
+
+  String _getSunSign() {
+    final placements = _birthChart?['core_placements'];
+
+    if (placements is Map) {
+      final sign = placements['sign'];
+
+      if (sign != null && sign.toString().trim().isNotEmpty) {
+        return sign.toString();
+      }
+    }
+
+    return 'â€”';
+  }
+
+  String _getMoonSign() {
+    final moon = _birthChart?['moon'];
+
+    if (moon is Map) {
+      final sign = moon['sign'];
+
+      if (sign != null && sign.toString().trim().isNotEmpty) {
+        return sign.toString();
+      }
+    }
+
+    return 'â€”';
+  }
+
+  String _getRisingSign() {
+    final rising = _birthChart?['rising'];
+
+    if (rising is Map) {
+      final sign = rising['sign'];
+
+      if (sign != null && sign.toString().trim().isNotEmpty) {
+        return sign.toString();
+      }
+    }
+
+    return 'â€”';
+  }
+
+  // =====================================================
+  // SIGN EMOJI
+  // =====================================================
+
+  String _getSignEmoji(String sign) {
+    final lower = sign.toLowerCase();
+
+    if (lower.contains('koÃ§') || lower.contains('aries')) {
+      return 'â™ˆ';
+    }
+
+    if (lower.contains('boÄŸa') || lower.contains('taurus')) {
+      return 'â™‰';
+    }
+
+    if (lower.contains('ikizler') || lower.contains('gemini')) {
+      return 'â™Š';
+    }
+
+    if (lower.contains('yengeÃ§') || lower.contains('cancer')) {
+      return 'â™‹';
+    }
+
+    if (lower.contains('aslan') || lower.contains('leo')) {
+      return 'â™Œ';
+    }
+
+    if (lower.contains('baÅŸak') || lower.contains('virgo')) {
+      return 'â™';
+    }
+
+    if (lower.contains('terazi') || lower.contains('libra')) {
+      return 'â™Ž';
+    }
+
+    if (lower.contains('akrep') || lower.contains('scorpio')) {
+      return 'â™';
+    }
+
+    if (lower.contains('yay') ||
+        lower.contains('sagittarius')) {
+      return 'â™';
+    }
+
+    if (lower.contains('oÄŸlak') ||
+        lower.contains('capricorn')) {
+      return 'â™‘';
+    }
+
+    if (lower.contains('kova') || lower.contains('aquarius')) {
+      return 'â™’';
+    }
+
+    if (lower.contains('balÄ±k') || lower.contains('pisces')) {
+      return 'â™“';
+    }
+
+    return 'âœ¨';
+  }
+
+  // =====================================================
+  // GÃœNÃœN BURÃ‡ YORUMU
+  // UZUN - BURCA Ã–ZEL
+  // =====================================================
+
+  String _getDailyComment() {
+    final sign = _getSunSign();
+
+    if (sign == 'â€”' || sign.isEmpty) {
+      return 'BugÃ¼n biraz yavaÅŸlamak ve kendi iÃ§ sesini dinlemek sana iyi gelebilir. Her ÅŸeyi aynÄ± anda Ã§Ã¶zmek yerine gerÃ§ekten Ã¶nemli olan konuya odaklanmayÄ± deneyebilirsin.';
+    }
+
+    final day = DateTime.now().day;
+
+    const comments = <String, List<String>>{
+      'KoÃ§': [
+        'BugÃ¼n enerjini uzun zamandÄ±r ertelediÄŸin bir konuya yÃ¶neltmek isteyebilirsin. HÄ±zlÄ± hareket etmek sana doÄŸal gelse de Ã¶nemli bir karar vermeden Ã¶nce birkaÃ§ dakika dÃ¼ÅŸÃ¼nmek iÅŸini kolaylaÅŸtÄ±rabilir.',
+        'GÃ¼nÃ¼n ilerleyen saatlerinde planÄ±nda olmayan bir geliÅŸme yaÅŸanabilir. Ä°lk tepkinle hareket etmek yerine durumu biraz gÃ¶zlemlemek, dÃ¼ÅŸÃ¼ndÃ¼ÄŸÃ¼nden daha iyi bir sonuÃ§ getirebilir.',
+        'BugÃ¼n kendini ortaya koyman gereken bir durumla karÅŸÄ±laÅŸabilirsin. Cesaretin sana yardÄ±mcÄ± olacak ancak karÅŸÄ±ndaki insanlarÄ±n fikirlerine de alan bÄ±rakmayÄ± unutma.',
+        'AklÄ±nda yeni bir baÅŸlangÄ±Ã§ varsa bugÃ¼n bununla ilgili kÃ¼Ã§Ã¼k bir adÄ±m atabilirsin. Her ÅŸeyi bir anda deÄŸiÅŸtirmene gerek yok; baÅŸlangÄ±Ã§ yapmak bile yeterli olabilir.',
+        'SabÄ±rsÄ±zlÄ±ÄŸÄ±n bugÃ¼n biraz daha belirgin olabilir. Ã–zellikle iletiÅŸimde hemen cevap vermek yerine dÃ¼ÅŸÃ¼nerek hareket etmek gereksiz bir gerginliÄŸin Ã¶nÃ¼ne geÃ§ebilir.',
+      ],
+      'BoÄŸa': [
+        'BugÃ¼n sakinliÄŸini korumak senin iÃ§in Ã¶nemli olabilir. Maddi veya gÃ¼nlÃ¼k hayatla ilgili bir konuda acele etmek yerine seÃ§eneklerini deÄŸerlendirmek daha gÃ¼venli hissettirebilir.',
+        'Uzun zamandÄ±r kafanÄ± meÅŸgul eden bir konu bugÃ¼n biraz daha netleÅŸebilir. Kendini baÅŸkalarÄ±nÄ±n hÄ±zÄ±na uydurmak yerine kendi temponu korumaya Ã§alÄ±ÅŸ.',
+        'BugÃ¼n alÄ±ÅŸtÄ±ÄŸÄ±n dÃ¼zenin dÄ±ÅŸÄ±na Ã§Ä±kmanÄ± gerektiren kÃ¼Ã§Ã¼k bir geliÅŸme yaÅŸanabilir. Ä°lk baÅŸta rahatsÄ±z edici gÃ¶rÃ¼nse de yeni bir seÃ§enek sana dÃ¼ÅŸÃ¼ndÃ¼ÄŸÃ¼nden daha iyi gelebilir.',
+        'GÃ¼vendiÄŸin insanlarla vakit geÃ§irmek isteyebilirsin. Ä°Ã§inde tuttuÄŸun bir konuyu paylaÅŸmak, son zamanlarda taÅŸÄ±dÄ±ÄŸÄ±n yÃ¼kÃ¼ biraz hafifletebilir.',
+        'Bir hedefin iÃ§in sabÄ±rlÄ± olman gereken bir gÃ¼n olabilir. Hemen sonuÃ§ almak yerine saÄŸlam ilerlemek uzun vadede senin iÃ§in daha doÄŸru olacaktÄ±r.',
+      ],
+      'Ä°kizler': [
+        'BugÃ¼n iletiÅŸim trafiÄŸin hareketli olabilir. Gelecek bir mesaj veya yapacaÄŸÄ±n kÄ±sa bir konuÅŸma, uzun zamandÄ±r dÃ¼ÅŸÃ¼nmediÄŸin bir konuyu yeniden gÃ¼ndeme getirebilir.',
+        'AklÄ±nda birden fazla fikir dolaÅŸabilir ve hangisine yÃ¶neleceÄŸine karar vermekte zorlanabilirsin. Hepsini aynÄ± anda yapmak yerine seni gerÃ§ekten heyecanlandÄ±ran seÃ§eneÄŸe odaklan.',
+        'BugÃ¼n yeni bir ÅŸey Ã¶ÄŸrenmek veya merak ettiÄŸin bir konuyu araÅŸtÄ±rmak sana iyi gelebilir. KÃ¼Ã§Ã¼k bir bilgi bile dÃ¼ÅŸÃ¼ncelerinin yÃ¶nÃ¼nÃ¼ deÄŸiÅŸtirebilir.',
+        'Sosyal Ã§evrenden biriyle yapacaÄŸÄ±n bir konuÅŸma gÃ¼nÃ¼nÃ¼n dikkat Ã§ekici kÄ±smÄ± olabilir. SÃ¶ylemek istediklerini aÃ§Ä±kÃ§a ifade etmek yanlÄ±ÅŸ anlaÅŸÄ±lmalarÄ±n Ã¶nÃ¼ne geÃ§ebilir.',
+        'Zihnin bugÃ¼n oldukÃ§a hÄ±zlÄ± Ã§alÄ±ÅŸabilir. Ancak her dÃ¼ÅŸÃ¼ndÃ¼ÄŸÃ¼nÃ¼ hemen uygulamak yerine biraz sÃ¼zmek, Ã¶zellikle Ã¶nemli kararlarÄ±nda sana yardÄ±mcÄ± olacaktÄ±r.',
+      ],
+      'YengeÃ§': [
+        'BugÃ¼n duygusal olarak biraz daha hassas olabilirsin. Seni gerÃ§ekten rahatlatan insanlara ve ortamlara yÃ¶nelmek gÃ¼nÃ¼n yoÄŸunluÄŸunu daha kolay atlatmana yardÄ±mcÄ± olabilir.',
+        'GeÃ§miÅŸten kalan bir konu yeniden aklÄ±na gelebilir. Bu kez aynÄ± yerden bakmak yerine bugÃ¼n bulunduÄŸun noktadan deÄŸerlendirmeyi dene.',
+        'BugÃ¼n yapacaÄŸÄ±n bir konuÅŸma beklediÄŸinden daha fazla anlam taÅŸÄ±yabilir. Hislerini saklamak yerine doÄŸru zamanda ve sakin bir ÅŸekilde ifade etmek sana iyi gelebilir.',
+        'Kendine ayÄ±racaÄŸÄ±n kÄ±sa bir zaman bile ruh halini deÄŸiÅŸtirebilir. Herkesle ilgilenmeden Ã¶nce kendi ihtiyaÃ§larÄ±nÄ± fark etmeyi unutma.',
+        'Sezgilerin bugÃ¼n gÃ¼Ã§lÃ¼ olabilir. Bir kiÅŸi veya durum hakkÄ±nda hissettiÄŸin ÅŸeyi hemen yok saymak yerine biraz gÃ¶zlemlemeye Ã§alÄ±ÅŸ.',
+      ],
+      'Aslan': [
+        'BugÃ¼n dikkatlerin Ã¼zerinde olduÄŸu bir durum yaÅŸayabilirsin. Kendini gÃ¶stermekten Ã§ekinme ancak baÅŸkalarÄ±nÄ±n sÃ¶ylediklerini dinlemek de sana beklemediÄŸin bir fikir kazandÄ±rabilir.',
+        'Uzun zamandÄ±r istediÄŸin bir konuda kendine daha fazla gÃ¼venmeye baÅŸlayabilirsin. BaÅŸkalarÄ±nÄ±n onayÄ±nÄ± beklemeden kendi kararÄ±nÄ± vermek bugÃ¼n Ã¶nemli olabilir.',
+        'Sosyal aÃ§Ä±dan hareketli bir gÃ¼n seni bekliyor olabilir. Yeni bir tanÄ±ÅŸma veya yapÄ±lacak kÄ±sa bir sohbet gÃ¼nÃ¼nÃ¼n havasÄ±nÄ± deÄŸiÅŸtirebilir.',
+        'BugÃ¼n enerjini gerÃ§ekten istediÄŸin ÅŸeylere ayÄ±rmak isteyebilirsin. Her fÄ±rsata yetiÅŸmeye Ã§alÄ±ÅŸmak yerine senin iÃ§in anlamlÄ± olan birkaÃ§ konuya odaklan.',
+        'Bir konuda Ã¶ne Ã§Ä±kman gerekebilir. Kendini ifade ederken doÄŸal olman ve olduÄŸundan farklÄ± gÃ¶rÃ¼nmeye Ã§alÄ±ÅŸmaman zaten yeterince etkili olacaktÄ±r.',
+      ],
+      'BaÅŸak': [
+        'BugÃ¼n kafandaki karmaÅŸayÄ± toparlamak daha kolay olabilir. Uzun zamandÄ±r ertelediÄŸin bir iÅŸi tamamlamak sana beklediÄŸinden fazla rahatlama saÄŸlayabilir.',
+        'Her ayrÄ±ntÄ±yÄ± kontrol etmeye Ã§alÄ±ÅŸmak yerine bazÄ± ÅŸeylerin kendi akÄ±ÅŸÄ±nda ilerlemesine izin vermeyi dene. Ã–zellikle iliÅŸkiler konusunda fazla dÃ¼ÅŸÃ¼nmek gereksiz bir yÃ¼k oluÅŸturabilir.',
+        'BugÃ¼n plan yapmak sana gÃ¼ven verebilir ancak planÄ±n dÄ±ÅŸÄ±na Ã§Ä±kan kÃ¼Ã§Ã¼k geliÅŸmelere de aÃ§Ä±k ol. Beklenmedik bir deÄŸiÅŸiklik dÃ¼ÅŸÃ¼ndÃ¼ÄŸÃ¼nden daha iyi bir sonuÃ§ getirebilir.',
+        'Kendinden Ã§ok fazla ÅŸey beklediÄŸini fark edebilirsin. BugÃ¼n mÃ¼kemmel olmaya Ã§alÄ±ÅŸmak yerine yaptÄ±klarÄ±nÄ±n yeterli olduÄŸunu kabul etmek sana iyi gelebilir.',
+        'Bir sÃ¼redir Ã§Ã¶zmeye Ã§alÄ±ÅŸtÄ±ÄŸÄ±n bir konu iÃ§in yeni bir yÃ¶ntem aklÄ±na gelebilir. Eski yÃ¶ntem iÅŸe yaramÄ±yorsa farklÄ± bir yol denemekten Ã§ekinme.',
+      ],
+      'Terazi': [
+        'BugÃ¼n iliÅŸkiler ve iletiÅŸim senin iÃ§in daha fazla Ã¶nem kazanabilir. Bir sÃ¼redir konuÅŸulmayan bir konu varsa bunu sakin bir ÅŸekilde ele almak iÅŸleri dÃ¼ÅŸÃ¼ndÃ¼ÄŸÃ¼nden daha kolay hale getirebilir.',
+        'Bir karar verirken Ã§evrendeki insanlarÄ±n fikirleri kafanÄ± karÄ±ÅŸtÄ±rabilir. Herkesi memnun etmeye Ã§alÄ±ÅŸmak yerine senin gerÃ§ekten ne istediÄŸini dÃ¼ÅŸÃ¼nmen daha doÄŸru olabilir.',
+        'Sosyal Ã§evrenden gelecek bir haber gÃ¼nÃ¼nÃ¼n yÃ¶nÃ¼nÃ¼ deÄŸiÅŸtirebilir. Ã–zellikle uzun zamandÄ±r gÃ¶rÃ¼ÅŸmediÄŸin biriyle yeniden iletiÅŸim kurma ihtimalin olabilir.',
+        'BugÃ¼n bir iliÅŸkide sÄ±nÄ±rlarÄ±nÄ± daha net gÃ¶stermen gerekebilir. Uyum saÄŸlamak gÃ¼zel olsa da kendi isteklerinden sÃ¼rekli vazgeÃ§mek zorunda deÄŸilsin.',
+        'KafanÄ± meÅŸgul eden bir konuda bugÃ¼n daha dengeli dÃ¼ÅŸÃ¼nebilirsin. DuygularÄ±nÄ± ve mantÄ±ÄŸÄ±nÄ± aynÄ± anda dinlemek vereceÄŸin kararÄ± kolaylaÅŸtÄ±rabilir.',
+      ],
+      'Akrep': [
+        'BugÃ¼n sezgilerin Ã¶zellikle gÃ¼Ã§lÃ¼ olabilir. Bir kiÅŸinin sÃ¶ylediklerinden Ã§ok davranÄ±ÅŸlarÄ±na dikkat etmek, anlamaya Ã§alÄ±ÅŸtÄ±ÄŸÄ±n bir konuda sana Ã¶nemli bir ipucu verebilir.',
+        'Bir konuda hemen tepki vermek yerine biraz beklemek daha doÄŸru olabilir. GÃ¼n ilerledikÃ§e olayÄ±n ilk dÃ¼ÅŸÃ¼ndÃ¼ÄŸÃ¼nden farklÄ± bir tarafÄ±nÄ± fark edebilirsin.',
+        'Uzun zamandÄ±r iÃ§inde tuttuÄŸun bir dÃ¼ÅŸÃ¼nce tekrar gÃ¼ndeme gelebilir. Bunu kendine saklamak yerine gÃ¼vendiÄŸin biriyle paylaÅŸmak rahatlamanÄ± saÄŸlayabilir.',
+        'BugÃ¼n Ã§evrendeki insanlarÄ±n sÃ¶ylediklerinden Ã§ok sÃ¶ylemediklerini fark edebilirsin. Ancak varsayÄ±m yapmak yerine doÄŸrudan konuÅŸmayÄ± tercih etmek daha saÄŸlÄ±klÄ± olabilir.',
+        'Bir konuda kontrolÃ¼ bÄ±rakmak zor gelebilir. Her ÅŸeyi yÃ¶netmeye Ã§alÄ±ÅŸmak yerine bazÄ± ÅŸeylerin kendi akÄ±ÅŸÄ±nda ilerlemesine izin vermeyi dene.',
+      ],
+      'Yay': [
+        'BugÃ¼n planÄ±nda olmayan bir geliÅŸme seni heyecanlandÄ±rabilir. Rutininden Ã§Ä±kmak ve farklÄ± bir ÅŸey denemek, son zamanlarda ihtiyaÃ§ duyduÄŸun enerjiyi yeniden getirebilir.',
+        'Yeni bir fikir veya farklÄ± bir bakÄ±ÅŸ aÃ§Ä±sÄ± gÃ¼nÃ¼nÃ¼n havasÄ±nÄ± deÄŸiÅŸtirebilir. Ã–zellikle uzun zamandÄ±r aynÄ± ÅŸekilde dÃ¼ÅŸÃ¼ndÃ¼ÄŸÃ¼n bir konuya baÅŸka bir aÃ§Ä±dan bakmayÄ± dene.',
+        'Uzakta olan birinden haber gelebilir veya uzun zamandÄ±r dÃ¼ÅŸÃ¼nmediÄŸin bir yer tekrar aklÄ±na dÃ¼ÅŸebilir. Bu durum sana yeni bir plan iÃ§in ilham verebilir.',
+        'BugÃ¼n merakÄ±nÄ±n peÅŸinden gitmek sana iyi gelebilir. KÃ¼Ã§Ã¼k bir araÅŸtÄ±rma veya spontane bir plan, beklediÄŸinden daha keyifli bir deneyime dÃ¶nÃ¼ÅŸebilir.',
+        'Ã–zgÃ¼r kalma isteÄŸin bugÃ¼n daha gÃ¼Ã§lÃ¼ olabilir. SorumluluklarÄ±nÄ± tamamen bÄ±rakmadan kendine hareket edebileceÄŸin kÃ¼Ã§Ã¼k bir alan yaratmaya Ã§alÄ±ÅŸ.',
+      ],
+      'OÄŸlak': [
+        'BugÃ¼n uzun zamandÄ±r uÄŸraÅŸtÄ±ÄŸÄ±n bir konuda kÃ¼Ã§Ã¼k de olsa bir ilerleme gÃ¶rebilirsin. Sonucu hemen almak yerine attÄ±ÄŸÄ±n adÄ±mlarÄ±n birikmesine izin ver.',
+        'SorumluluklarÄ±n yoÄŸun olabilir ancak gÃ¼n iÃ§inde kendine ayÄ±racaÄŸÄ±n kÄ±sa bir zaman verimini azaltmaz. Aksine zihnini toparlamana yardÄ±mcÄ± olabilir.',
+        'Bir hedefin iÃ§in bugÃ¼n Ã¶nemli bir adÄ±m atabilirsin. BÃ¼yÃ¼k bir deÄŸiÅŸiklik yapmana gerek yok; dÃ¼zenli ilerlemek senin iÃ§in zaten en gÃ¼Ã§lÃ¼ yÃ¶ntemlerden biri.',
+        'SabÄ±rlÄ± olman gereken bir konuda beklediÄŸinden daha iyi bir geliÅŸme yaÅŸanabilir. Kontrol edemediÄŸin kÄ±smÄ± bÄ±rakÄ±p kendi yapabileceklerine odaklan.',
+        'Her ÅŸeyi tek baÅŸÄ±na halletmek zorunda olmadÄ±ÄŸÄ±nÄ± hatÄ±rla. GÃ¼vendiÄŸin birinden destek istemek dÃ¼ÅŸÃ¼ndÃ¼ÄŸÃ¼n kadar zor olmayabilir.',
+      ],
+      'Kova': [
+        'BugÃ¼n farklÄ± dÃ¼ÅŸÃ¼nmen gereken bir durumla karÅŸÄ±laÅŸabilirsin. AlÄ±ÅŸÄ±lmÄ±ÅŸ yÃ¶ntemler iÅŸe yaramÄ±yorsa kendi yÃ¶ntemini denemekten Ã§ekinme.',
+        'Beklenmedik bir fikir bir problemin Ã§Ã¶zÃ¼mÃ¼nÃ¼ kolaylaÅŸtÄ±rabilir. AklÄ±na gelen ilk dÃ¼ÅŸÃ¼nceyi hemen elemek yerine biraz Ã¼zerinde dur.',
+        'Ã‡evrendekilerden farklÄ± dÃ¼ÅŸÃ¼ndÃ¼ÄŸÃ¼n bir konuda fikrini paylaÅŸabilirsin. Herkesin aynÄ± ÅŸeyi dÃ¼ÅŸÃ¼nmesi gerekmediÄŸini kendine hatÄ±rlat.',
+        'Yeni bir insan veya fikir bugÃ¼n ilgini Ã§ekebilir. Bu karÅŸÄ±laÅŸmanÄ±n sana uzun vadede ne katacaÄŸÄ±nÄ± hemen anlaman gerekmiyor.',
+        'Kendi yolundan gitmek bugÃ¼n daha doÄŸru hissettirebilir. BaÅŸkalarÄ±nÄ±n beklentileriyle kendi isteklerin arasÄ±nda denge kurmaya Ã§alÄ±ÅŸ.',
+      ],
+      'BalÄ±k': [
+        'BugÃ¼n sezgilerin bir konuda sana yol gÃ¶sterebilir. Ancak hissettiklerini gerÃ§eklerle birlikte deÄŸerlendirmek daha saÄŸlÄ±klÄ± bir karar vermene yardÄ±mcÄ± olacaktÄ±r.',
+        'Duygusal olarak seni etkileyen bir konuyu bugÃ¼n daha net gÃ¶rebilirsin. Kendine biraz zaman tanÄ±mak, acele bir karar vermekten daha iyi olabilir.',
+        'YaratÄ±cÄ±lÄ±ÄŸÄ±nÄ±n yÃ¼kseldiÄŸi bir gÃ¼n olabilir. MÃ¼zik, yazmak, Ã§izmek veya sadece hayal kurmak bile zihnini toparlamana yardÄ±mcÄ± olabilir.',
+        'Bir rÃ¼ya, his veya tesadÃ¼f dikkatini Ã§ekebilir. Bunu hemen anlamlandÄ±rmaya Ã§alÄ±ÅŸmak yerine sende uyandÄ±rdÄ±ÄŸÄ± duyguyu fark etmeyi dene.',
+        'BugÃ¼n biraz yavaÅŸlamak sana iyi gelebilir. Her ÅŸeye yetiÅŸmek yerine seni gerÃ§ekten rahatlatan ÅŸeylere zaman ayÄ±rmayÄ± seÃ§ebilirsin.',
+      ],
+    };
+
+    final signComments = comments[sign];
+
+    if (signComments == null || signComments.isEmpty) {
+      return 'BugÃ¼n gÃ¶kyÃ¼zÃ¼nÃ¼n enerjisi seni kendi ritmini korumaya davet ediyor. Acele kararlar vermek yerine gÃ¼nÃ¼n getirdiklerini gÃ¶zlemlemek sana daha iyi gelebilir.';
+    }
+
+    return signComments[day % signComments.length];
+  }
+
+  // =====================================================
+  // SHARE DAILY MESSAGE
+  // =====================================================
+
+  Future<void> _shareDailyMessage() async {
+    final message = _getTodayMessage();
+
+    final text =
+        'ðŸ”® BugÃ¼nÃ¼n MesajÄ±\n\n'
+        '$message\n\n'
+        'âœ¨ Cosmica';
+
+    await SharePlus.instance.share(
+      ShareParams(text: text),
+    );
+  }
+
+  // =====================================================
+  // SHARE HOROSCOPE
+  // =====================================================
+
+  Future<void> _shareHoroscope() async {
+    final sunSign = _getSunSign();
+    final dailyComment = _getDailyComment();
+    final emoji = _getSignEmoji(sunSign);
+
+    final text =
+        '$emoji $sunSign - GÃ¼nÃ¼n BurÃ§ Yorumu\n\n'
+        '$dailyComment\n\n'
+        'âœ¨ Cosmica';
+
+    await SharePlus.instance.share(
+      ShareParams(text: text),
+    );
+  }
+
+  // =====================================================
+  // INIT
+  // =====================================================
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBirthChart();
+  }
+
+  // =====================================================
+  // BUILD
+  // =====================================================
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final theme = Theme.of(context);
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: user == null
+          ? null
+          : FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .snapshots(),
+      builder: (context, snapshot) {
+        String name = user?.displayName ?? 'Cosmica';
+
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final rawData = snapshot.data!.data();
+
+          if (rawData is Map<String, dynamic>) {
+            if (rawData['name'] != null &&
+                rawData['name'].toString().isNotEmpty) {
+              name = rawData['name'].toString();
+            }
+          }
+        }
+
+        final sunSign = _getSunSign();
+        final sunEmoji = _getSignEmoji(sunSign);
+        final todayMessage = _getTodayMessage();
+
+        return SafeArea(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // =====================================================
+                // HEADER
+                // =====================================================
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'âœ¨ GÃ¼naydÄ±n, $name',
+                            style: TextStyle(
+                              fontSize: 27,
+                              fontWeight: FontWeight.w700,
+                              color:
+                                  theme.colorScheme.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            'BugÃ¼n gÃ¶kyÃ¼zÃ¼ sana ne sÃ¶ylÃ¼yor?',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.colorScheme.surface,
+                        border: Border.all(
+                          color: const Color(0xFF8B5CF6)
+                              .withValues(alpha: 0.35),
+                        ),
+                      ),
+                      child: IconButton(
+                        tooltip: 'Bildirimler',
+                        icon: Icon(
+                          Icons.notifications_none_rounded,
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.7),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const NotificationsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 28),
+
+                // =====================================================
+                // KOZMÄ°K PROFÄ°L
+                // =====================================================
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF6D28D9),
+                        Color(0xFF312E81),
+                        Color(0xFF17102D),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6D28D9)
+                            .withValues(alpha: 0.22),
+                        blurRadius: 25,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.auto_awesome,
+                            size: 18,
+                            color: Colors.white70,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'KOZMÄ°K PROFÄ°LÄ°N',
+                            style: TextStyle(
+                              fontSize: 12,
+                              letterSpacing: 2,
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (_loading)
+                            const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child:
+                                  CircularProgressIndicator(
+                                strokeWidth: 1.5,
+                                color: Colors.white70,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _AstroItem(
+                              icon: 'â˜€ï¸',
+                              title: 'GÃ¼neÅŸ',
+                              value:
+                                  _loading ? '...' : sunSign,
+                            ),
+                          ),
+                          Expanded(
+                            child: _AstroItem(
+                              icon: 'ðŸŒ™',
+                              title: 'Ay',
+                              value: _loading
+                                  ? '...'
+                                  : _getMoonSign(),
+                            ),
+                          ),
+                          Expanded(
+                            child: _AstroItem(
+                              icon: 'â¬†ï¸',
+                              title: 'YÃ¼kselen',
+                              value: _loading
+                                  ? '...'
+                                  : _getRisingSign(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 28),
+
+                // =====================================================
+                // BUGÃœNÃœN MESAJI
+                // SADECE KISA MESAJ
+                // =====================================================
+
+                Text(
+                  'BugÃ¼nÃ¼n MesajÄ±',
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+
+                const SizedBox(height: 13),
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(23),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: theme.colorScheme.onSurface
+                          .withValues(alpha: 0.06),
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          top: 4,
+                          right: 35,
+                          left: 4,
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 66,
+                              height: 66,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: const Color(0xFF6D28D9)
+                                    .withValues(alpha: 0.20),
+                              ),
+                              child: const Center(
+                                child: Text(
+                                  'ðŸ”®',
+                                  style:
+                                      TextStyle(fontSize: 32),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 17),
+                            Text(
+                              todayMessage,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 18,
+                                height: 1.4,
+                                fontWeight: FontWeight.w600,
+                                color:
+                                    theme.colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: IconButton(
+                          onPressed: _shareDailyMessage,
+                          tooltip: 'PaylaÅŸ',
+                          icon: const Icon(
+                            Icons.share_rounded,
+                            size: 20,
+                            color: Color(0xFFB794F4),
+                          ),
+                          splashRadius: 22,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 28),
+
+                // =====================================================
+                // GÃœNÃœN BURÃ‡ YORUMU
+                // SADECE BURCA Ã–ZEL DETAYLI YORUM
+                // =====================================================
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'GÃ¼nÃ¼n BurÃ§ Yorumu',
+                        style: TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      sunEmoji,
+                      style: const TextStyle(fontSize: 25),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 13),
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(21),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: const Color(0xFF8B5CF6)
+                          .withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding:
+                            const EdgeInsets.only(right: 35),
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 45,
+                                  height: 45,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(0xFF6D28D9)
+                                        .withValues(alpha: 0.18),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      sunEmoji,
+                                      style: const TextStyle(
+                                        fontSize: 23,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _loading
+                                          ? 'Burcun'
+                                          : sunSign,
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight:
+                                            FontWeight.w700,
+                                        color: theme
+                                            .colorScheme
+                                            .onSurface,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      _dailyHoroscopeLoading
+                                          ? 'GÃ¶kyÃ¼zÃ¼ okunuyor'
+                                          : 'BugÃ¼nÃ¼n yorumu',
+                                      style: TextStyle(
+                                        color: theme
+                                            .colorScheme
+                                            .onSurface
+                                            .withValues(
+                                              alpha: 0.5,
+                                            ),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 17),
+                            Text(
+                              _loading ||
+                                      _dailyHoroscopeLoading
+                                  ? 'BugÃ¼nÃ¼n gÃ¶kyÃ¼zÃ¼ okunuyor...'
+                                  : _getDailyComment(),
+                              style: TextStyle(
+                                color: theme
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.7),
+                                height: 1.55,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        top: -8,
+                        right: -8,
+                        child: IconButton(
+                          onPressed:
+                              _loading ||
+                                      _dailyHoroscopeLoading
+                                  ? null
+                                  : _shareHoroscope,
+                          tooltip: 'PaylaÅŸ',
+                          icon: Icon(
+                            Icons.share_rounded,
+                            size: 20,
+                            color: _loading ||
+                                    _dailyHoroscopeLoading
+                                ? theme
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.2)
+                                : const Color(0xFFB794F4),
+                          ),
+                          splashRadius: 22,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 28),
+
+                // =====================================================
+                // GÃ–KYÃœZÃœ GÃœNDEMÄ°
+                // =====================================================
+
+                Text(
+                  'GÃ¶kyÃ¼zÃ¼ GÃ¼ndemi',
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+
+                const SizedBox(height: 13),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: _SkyCard(
+                        icon: 'ðŸŒ™',
+                        title: 'Ay',
+                        subtitle: 'Duygular',
+                        description:
+                            'BugÃ¼n iÃ§ sesine kulak vermek iÃ§in biraz alan aÃ§.',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _SkyCard(
+                        icon: 'âœ¨',
+                        title: 'Enerji',
+                        subtitle: 'Yeni baÅŸlangÄ±Ã§lar',
+                        description:
+                            'Yeni bir fikir iÃ§in kÃ¼Ã§Ã¼k bir adÄ±m at.',
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+
+                // =====================================================
+                // BIORHYTHM + NUMEROLOGY
+                // =====================================================
+
+                if (snapshot.hasData &&
+                    snapshot.data!.exists)
+                  Builder(
+                    builder: (context) {
+                      final rawData =
+                          snapshot.data!.data();
+
+                      if (rawData
+                          is! Map<String, dynamic>) {
+                        return const SizedBox.shrink();
+                      }
+
+                      final birthDate =
+                          rawData['birthDate'];
+
+                      if (birthDate is! Timestamp) {
+                        return const SizedBox.shrink();
+                      }
+
+                      return Column(
+                        children: [
+                          BiorhythmCard(
+                            birthDate: birthDate.toDate(),
+                          ),
+                          const SizedBox(height: 24),
+                          NumerologyCard(
+                            birthDate: birthDate.toDate(),
+                          ),
+                          const SizedBox(height: 28),
+                        ],
+                      );
+                    },
+                  ),
+
+                // =====================================================
+                // TAROT
+                // =====================================================
+
+                GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const TarotScreen(),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF251342),
+                          Color(0xFF17102D),
+                        ],
+                      ),
+                      border: Border.all(
+                        color: const Color(0xFF8B5CF6)
+                            .withValues(alpha: 0.18),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 55,
+                          height: 55,
+                          decoration: BoxDecoration(
+                            borderRadius:
+                                BorderRadius.circular(17),
+                            color: const Color(0xFF6D28D9)
+                                .withValues(alpha: 0.22),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'ðŸƒ',
+                              style:
+                                  TextStyle(fontSize: 27),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 15),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Tarotuna Bak',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight:
+                                      FontWeight.w700,
+                                  color: theme
+                                      .colorScheme
+                                      .onSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'BugÃ¼nÃ¼n enerjisi iÃ§in bir kart seÃ§.',
+                                style: TextStyle(
+                                  color: theme
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.5),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 16,
+                          color: theme
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// =====================================================
+// ASTRO ITEM
+// =====================================================
+
+class _AstroItem extends StatelessWidget {
+  final String icon;
+  final String title;
+  final String value;
+
+  const _AstroItem({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      children: [
+        Text(
+          icon,
+          style: const TextStyle(fontSize: 25),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            color: theme.colorScheme.onSurface
+                .withValues(alpha: 0.6),
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          value,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// =====================================================
+// SKY CARD
+// =====================================================
+
+class _SkyCard extends StatelessWidget {
+  final String icon;
+  final String title;
+  final String subtitle;
+  final String description;
+
+  const _SkyCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.description,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: theme.colorScheme.onSurface
+              .withValues(alpha: 0.05),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Text(
+            icon,
+            style: const TextStyle(fontSize: 27),
+          ),
+          const SizedBox(height: 13),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: Color(0xFFA78BFA),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            description,
+            style: TextStyle(
+              color: theme.colorScheme.onSurface
+                  .withValues(alpha: 0.5),
+              fontSize: 12,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =====================================================
+// TAROT
+// =====================================================
+
+class _TarotContent extends StatelessWidget {
+  const _TarotContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return const TarotScreen();
+  }
+}
+
+// =====================================================
+// PROFILE
+// =====================================================
+
+class _ProfileContent extends StatelessWidget {
+  final Function(ThemeMode) onThemeChanged;
+  final ThemeMode currentThemeMode;
+
+  const _ProfileContent({
+    required this.onThemeChanged,
+    required this.currentThemeMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ProfileScreen(
+      onThemeChanged: onThemeChanged,
+      currentThemeMode: currentThemeMode,
+    );
+  }
+}
+

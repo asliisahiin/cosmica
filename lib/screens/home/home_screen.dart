@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cosmica/services/birth_chart_service.dart';
 import 'package:cosmica/services/horoscope_service.dart';
+import 'notifications_screen.dart';
+import 'package:cosmica/services/daily_message_service.dart';
 
 import 'biorhythm_card.dart';
 import 'numerology_card.dart';
@@ -146,6 +148,20 @@ class _HomeContentState extends State<_HomeContent> {
 
     return _dailyMessages[index];
   }
+
+  
+Future<void> _syncDailyMessage() async {
+  final message = _getTodayMessage();
+
+  try {
+    await DailyMessageService.syncTodayMessage(
+      fallbackMessage: message,
+    );
+  } catch (error) {
+    debugPrint('Günlük mesaj kaydedilemedi: $error');
+  }
+}
+
 
   // =====================================================
   // BIRTH CHART
@@ -527,11 +543,13 @@ class _HomeContentState extends State<_HomeContent> {
   // INIT
   // =====================================================
 
-  @override
-  void initState() {
-    super.initState();
-    _loadBirthChart();
-  }
+ 
+@override
+void initState() {
+  super.initState();
+  _loadBirthChart();
+  _syncDailyMessage();
+}
 
   // =====================================================
   // BUILD
@@ -617,10 +635,20 @@ class _HomeContentState extends State<_HomeContent> {
                               .withValues(alpha: 0.35),
                         ),
                       ),
-                      child: Icon(
-                        Icons.notifications_none_rounded,
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.7),
+                      child: IconButton(
+                        tooltip: 'Bildirimler',
+                        icon: Icon(
+                          Icons.notifications_none_rounded,
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.7),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const NotificationsScreen(),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -1302,3 +1330,4 @@ class _ProfileContent extends StatelessWidget {
     );
   }
 }
+
