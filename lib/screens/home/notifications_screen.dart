@@ -25,11 +25,13 @@ class NotificationsScreen extends StatelessWidget {
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(
-                    child: Text('Bildirimler yüklenirken bir hata oluştu.'),
-                  );
-                }
+               if (snapshot.hasError) {
+  debugPrint('Bildirim hatası: ${snapshot.error}');
+
+  return const Center(
+    child: Text('Bildirimler yüklenirken bir hata oluştu.'),
+  );
+}
 
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
