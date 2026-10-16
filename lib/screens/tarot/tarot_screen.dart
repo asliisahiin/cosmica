@@ -1183,12 +1183,7 @@ class TarotResultScreen extends StatelessWidget {
 
     return '$intro\n\n'
         '${card.meaning} '
-        '${card.energy} '
-        'Bu kart özellikle ${card.name} enerjisinin hayatındaki bu noktada '
-        'rastgele bir sembol olarak değil, üzerinde düşünmen gereken bir tema '
-        'olarak ele alınabileceğini söylüyor. '
-        'Burada önemli olan kartın sana kesin bir gelecek anlatması değil, '
-        'içinde bulunduğun duruma başka bir açıdan bakmanı sağlaması.';
+        '${card.energy}';
   }
 
     Future<void> _saveReading(BuildContext context) async {
